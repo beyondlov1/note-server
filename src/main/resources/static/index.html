@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>index</title>
+    <!-- Insert this line above script imports  -->
+    <script>if (typeof module === 'object') {window.module = module; module = undefined;}</script>
+
+    <script src="js/vue.js"></script>
+    <script src="js/element-ui.js"></script>
+    <script src="js/jquery.js"></script>
+    <script src="js/common.js"></script>
+    <link rel="stylesheet" href="css/element-ui.css">
+
+    <!-- Insert this line after script imports -->
+    <script>if (window.module) module = window.module;</script>
+</head>
+<body>
+<div id="app">
+    <div>
+        <el-table
+                ref="fileList"
+                :data="fileItems"
+                style="width: 30%;float: left"
+                :show-header="false"
+                @row-click="e_read"
+                highlight-current-row
+                height="900">
+            <el-table-column prop="name" ></el-table-column>
+            <el-table-column
+                    label="操作"
+                    width="50">
+                <template slot-scope="scope">
+                    <el-button @click="e_confirmDelete(scope.row)" type="text" size="small">删除</el-button>
+                </template>
+            </el-table-column>
+        </el-table>
+        <div style="width: 70%;float: left;height: 900px;">
+            <p>当前路径: {{repoAbsPath}}</p>
+            <el-input
+                    v-on:mouseover.native="onMouseOver"
+                    placeholder="请输入名称"
+                    v-model="name"
+                    clearable
+                    v-on:keyup.native="onContentKeyUp">
+            </el-input>
+            <el-input
+                    v-on:mouseover.native="onMouseOverContent"
+                    v-on:mouseleave.native="onMouseLeaveContent"
+                    ref="content"
+                    type="textarea"
+                    :autosize="{ minRows: 20, maxRows: 40}"
+                    placeholder="请输入内容"
+                    v-model="content"
+                    @blur="write"
+                    v-on:keyup.native="onContentKeyUp">
+            </el-input>
+        </div>
+    </div>
+    <a href="nodes.html" style="position: absolute;right: 20px; bottom: 20px">repos</a>
+</div>
+</body>
+
+<script>
+
+    function nullToBlank(str){
+        if (str){
+            return str;
+        }else{
+            return "";
+        }
+    }
+
+    var app = new Vue({
+        el: "#app",
+        data: {
+            repoAbsPath:"",
+            name:"",
+            content: "",
+            oldName: "",
+            oldContent: "",
+            fileItems: []
+        },
+        methods: {
+            onMouseOver:function (event){
+                $(event.target).focus()
+            },
+            onMouseOverContent:function (event){
+                app.$refs.content.focus()
+            },
+            onMouseLeaveContent:function (event){
+                // app.$refs.content.blur()
+            },
+            onContentKeyUp: function (event){
+                if (event.ctrlKey === true && event.keyCode === 13) {
+                    app.write(app.name,app.content)
+                }
+            },
+            write: function (e) {
+                if (!app.name || !app.content){
+                    return;
+                }
+                if (app.name.trim() === app.oldName.trim() && app.content.trim() === app.oldContent.trim()){
+                    return;
+                }
+                postForJson("/note-server/write", {repoAbsPath:app.repoAbsPath, name:app.name,content:app.content}, function (result) {
+                    list(function (result) {
+                        let selectedRow;
+                        for (const fileItem of app.fileItems) {
+                            if (fileItem.name === app.name){
+                                selectedRow = fileItem;
+                                break;
+                            }
+                        }
+                        app.$refs.fileList.setCurrentRow(selectedRow)
+                        app.$message({
+                            message: '添加/更新成功',
+                            type: 'success',
+                            duration: 1000
+                        });
+                        app.oldName = app.name
+                        app.oldContent = app.content
+                        app.$refs.content.blur()
+                    })
+                },function (result) {
+                    app.$message({
+                        message: '添加/更新失败: '+result.msg,
+                        type: 'error'
+                    });
+                })
+            },
+            read: function (name){
+                postForJson("/note-server/read", {repoAbsPath:app.repoAbsPath,name:name}, function (result) {
+                    app.name = nullToBlank(name);
+                    app.content = nullToBlank(result.data);
+                    app.oldName = nullToBlank(name);
+                    app.oldContent = nullToBlank(result.data);
+                })
+            },
+            delete: function (name){
+                postForJson("/note-server/delete", {repoAbsPath:app.repoAbsPath,name:name}, function (result) {
+                    list(function (listResult){
+                        app.name = ""
+                        app.content = ""
+                        app.oldName = ""
+                        app.oldContent = ""
+                        app.$message({
+                            message: '删除成功',
+                            type: 'success',
+                            duration: 1000
+                        });
+                    })
+                })
+            },
+            e_read: function (row){
+                let name = row["name"]
+                app.read(name)
+            },
+            e_delete: function (row){
+                let name = row["name"]
+                app.delete(name)
+            },
+            e_confirmDelete:function (row){
+                let name = row["name"]
+                this.$confirm('此操作将永久删除该文件, 是否继续?', '提示', {
+                    confirmButtonText: '确定',
+                    cancelButtonText: '取消',
+                    type: 'warning'
+                }).then(() => {
+                    app.delete(name)
+                }).catch(() => {
+                });
+            }
+        }
+    });
+
+    currentRepo(list);
+
+    function currentRepo(onSuccess){
+        let inModel = {};
+        postForJson("/note-server/currentRepo", inModel, function (result) {
+            if (result.data){
+                app.repoAbsPath = result.data
+                if (onSuccess){
+                    onSuccess()
+                }
+            }else{
+                jumpUrl("nodes.html")
+            }
+        }, function (result) {
+            app.$message({
+                message: '获取当前repo失败: '+result.msg,
+                type: 'error'
+            });
+        });
+    }
+
+    function list(onSuccess){
+        let listModel = {};
+        listModel["repoAbsPath"] = app.repoAbsPath;
+        postForJson("/note-server/list", listModel, function (result) {
+            app.fileItems = result.data
+            if (onSuccess){
+                onSuccess(result)
+            }
+        }, function (result) {
+            app.$message({
+                message: '获取列表失败: '+result.msg,
+                type: 'error'
+            });
+        });
+    }
+
+</script>

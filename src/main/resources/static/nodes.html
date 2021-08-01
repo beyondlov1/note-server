@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>nodes</title>
+    <!-- Insert this line above script imports  -->
+    <script>if (typeof module === 'object') {
+        window.module = module;
+        module = undefined;
+    }</script>
+
+    <script src="js/vue.js"></script>
+    <script src="js/element-ui.js"></script>
+    <script src="js/jquery.js"></script>
+    <script src="js/common.js"></script>
+    <link rel="stylesheet" href="css/element-ui.css">
+
+    <!-- Insert this line after script imports -->
+    <script>if (window.module) module = window.module;</script>
+</head>
+<body>
+<div id="app">
+    <div>
+        <el-table
+                ref="repos"
+                :data="repos"
+                style="width: 50%;float: left"
+                :show-header="true"
+                @row-click="e_read"
+                highlight-current-row
+                height="900">
+            <el-table-column prop="repoAbsPath" label="repoAbsPath"></el-table-column>
+            <el-table-column prop="committerName" label="committerName"></el-table-column>
+            <el-table-column prop="committerEmail" label="committerEmail"></el-table-column>
+            <el-table-column prop="current" :formatter="formatBoolean" label="isCurrent"></el-table-column>
+            <el-table-column
+                    label="操作"
+                    width="100">
+                <template slot-scope="scope">
+                    <el-button @click="stopRunRepo(scope.row)" type="text" size="small">删除</el-button>
+                </template>
+            </el-table-column>
+        </el-table>
+        <div style="width: 50%;float: left;height: 900px;">
+            <el-input
+                    placeholder="请输入repoAbsPath"
+                    v-model="selectedNode.repoAbsPath">
+            </el-input>
+            <el-input
+                    placeholder="请输入committerName"
+                    v-model="selectedNode.committerName">
+            </el-input>
+            <el-input
+                    placeholder="请输入committerEmail"
+                    v-model="selectedNode.committerEmail">
+            </el-input>
+            <el-button @click="upsertRepo">submit</el-button>
+        </div>
+    </div>
+    <a href="index.html" style="position: absolute;right: 20px; bottom: 20px">main</a>
+</div>
+</body>
+
+<script>
+
+
+    var app = new Vue({
+        el: "#app",
+        data: {
+            repos: [],
+            selectedNode: {}
+        },
+        methods: {
+            listRepos: function () {
+                postForJson("/note-server/listRepos", {}, function (result) {
+                    app.repos = result.data
+                })
+            },
+            upsertRepo: function () {
+                postForJson("/note-server/upsertRepo", app.selectedNode, function (result) {
+                    postForJson("/note-server/listRepos", {}, function (result) {
+                        app.repos = result.data
+                        app.$message({
+                            message: '添加/更新成功',
+                            type: 'success',
+                            duration: 1000
+                        });
+                    })
+                })
+            },
+            formatBoolean: function (row, column, cellValue) {
+                let ret = ''
+                if (cellValue) {
+                    ret = "true"
+                } else {
+                    ret = "false"
+                }
+                return ret;
+            },
+            e_read: function (row) {
+                app.selectedNode = row;
+                postForJson("/note-server/selectRepo", {selectedRepoAbsPath: row.repoAbsPath}, function (result) {
+                    postForJson("/note-server/listRepos", {}, function (result) {
+                        app.repos = result.data
+                        console.log("select repo success")
+                    })
+                })
+            },
+            stopRunRepo: function (row) {
+                postForJson("/note-server/stopRunRepo", {selectedRepoAbsPath: row.repoAbsPath}, function (result) {
+                    postForJson("/note-server/listRepos", {}, function (result) {
+                        app.repos = result.data
+                        app.$message({
+                            message: '删除成功(停止自动同步,不实际删除文件)',
+                            type: 'success',
+                            duration: 1000
+                        });
+                    })
+                })
+            }
+        }
+    });
+
+    app.listRepos();
+
+</script>
