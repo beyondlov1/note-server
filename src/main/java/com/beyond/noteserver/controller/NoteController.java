@@ -78,7 +78,7 @@ public class NoteController implements NoteControllerApi {
                 listReposOutModel.setCommitterName(config.getCommitterName());
                 listReposOutModel.setCommitterEmail(config.getCommitterEmail());
                 if (CollectionUtils.isNotEmpty(config.getRemoteConfigs())){
-                    GitLiteConfig.RemoteConfig remoteConfig = config.getRemoteConfigs().get(0);
+                    GitLiteConfig.RemoteConfig remoteConfig = config.getRemoteConfigs().get(config.getRemoteConfigs().size() - 1);
                     listReposOutModel.setRemoteName(remoteConfig.getRemoteName());
                     listReposOutModel.setRemoteUrl(remoteConfig.getRemoteUrl());
                     listReposOutModel.setRemoteUserName(remoteConfig.getRemoteUserName());

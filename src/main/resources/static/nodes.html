@@ -27,12 +27,14 @@
                 style="width: 50%;float: left"
                 :show-header="true"
                 @row-click="e_read"
+                @row-dblclick="jumpToMain"
+                :cell-style="rowStyle"
                 highlight-current-row
                 height="900">
             <el-table-column prop="repoAbsPath" label="repoAbsPath"></el-table-column>
             <el-table-column prop="committerName" label="committerName"></el-table-column>
             <el-table-column prop="committerEmail" label="committerEmail"></el-table-column>
-            <el-table-column prop="current" :formatter="formatBoolean" label="isCurrent"></el-table-column>
+            <el-table-column prop="current" :formatter="formatBoolean" v-if="false" label="isCurrent"></el-table-column>
             <el-table-column prop="remoteName" label="remoteName"></el-table-column>
             <el-table-column prop="remoteUrl" label="remoteUrl"></el-table-column>
             <el-table-column
@@ -73,6 +75,7 @@
             </el-input>
 
             <el-input
+                    type='password'
                     placeholder="请输入remotePassword"
                     v-model="selectedNode.remotePassword">
             </el-input>
@@ -95,6 +98,15 @@
             selectedNode: {}
         },
         methods: {
+            jumpToMain:function (row, event, column){
+                jumpUrl("index.html")
+            },
+            rowStyle:function ({row, column, rowIndex, columnIndex}) {
+                //设置表格每行间隔颜色
+                if (row.current){
+                    return "background:#2A3056;border:none;color: #FFFFFF;"
+                }
+            },
             listRepos: function () {
                 postForJson("/note-server/listRepos", {}, function (result) {
                     app.repos = result.data
