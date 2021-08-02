@@ -19,7 +19,7 @@
     <dependencies>
 
         <dependency>
-            <groupId>org.beyond</groupId>
+            <groupId>com.beyond</groupId>
             <artifactId>jgit-lite-main</artifactId>
             <version>1.0</version>
         </dependency>
