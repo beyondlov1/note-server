@@ -1,2 +1,5 @@
 server:
   port: 13131
+logging:
+  level:
+    root: info

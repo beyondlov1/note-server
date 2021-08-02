@@ -9,4 +9,7 @@ public class ListReposOutModel {
     private String repoAbsPath;
     private String committerName;
     private String committerEmail;
+    private String remoteName;
+    private String remoteUrl;
+    private String remoteUserName;
 }

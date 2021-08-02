@@ -8,8 +8,10 @@ import com.beyond.jgit.util.PathUtils;
 import com.beyond.noteserver.model.*;
 import com.fasterxml.jackson.core.type.TypeReference;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.io.File;
@@ -75,6 +77,12 @@ public class NoteController implements NoteControllerApi {
             if (config != null) {
                 listReposOutModel.setCommitterName(config.getCommitterName());
                 listReposOutModel.setCommitterEmail(config.getCommitterEmail());
+                if (CollectionUtils.isNotEmpty(config.getRemoteConfigs())){
+                    GitLiteConfig.RemoteConfig remoteConfig = config.getRemoteConfigs().get(0);
+                    listReposOutModel.setRemoteName(remoteConfig.getRemoteName());
+                    listReposOutModel.setRemoteUrl(remoteConfig.getRemoteUrl());
+                    listReposOutModel.setRemoteUserName(remoteConfig.getRemoteUserName());
+                }
             }
             result.add(listReposOutModel);
         }
@@ -83,10 +91,16 @@ public class NoteController implements NoteControllerApi {
 
     @Override
     public JsonResult<String> upsertRepo(CreateRepoInModel inModel) throws IOException {
+        GitLite git;
         if (StringUtils.isBlank(inModel.getCommitterName()) || StringUtils.isBlank(inModel.getCommitterEmail())) {
-            getOrCreateRepo(inModel.getRepoAbsPath());
+            git = getOrCreateRepo(inModel.getRepoAbsPath());
         } else {
-            getOrCreateRepo(inModel.getRepoAbsPath(), inModel.getCommitterName(), inModel.getCommitterEmail());
+            git = getOrCreateRepo(inModel.getRepoAbsPath(), inModel.getCommitterName(), inModel.getCommitterEmail());
+        }
+        if (StringUtils.isNotBlank(inModel.getRemoteName()) && StringUtils.isNotBlank(inModel.getRemoteUrl())) {
+            GitLiteConfig config = git.getConfig();
+            config.upsertRemote(inModel.getRemoteName(), inModel.getRemoteUrl(), inModel.getRemoteUserName(), inModel.getRemotePassword());
+            config.save();
         }
         return JsonResult.success("success");
     }
@@ -156,6 +170,29 @@ public class NoteController implements NoteControllerApi {
             });
         } else {
             return new HashSet<>();
+        }
+    }
+
+    @Scheduled(fixedDelay = 60 * 60 * 1000,initialDelay = 1000)
+    public void autoSync() throws IOException {
+        Set<String> runningRepoAbsPaths = getRunningRepoAbsPaths();
+        for (String runningRepoAbsPath : runningRepoAbsPaths) {
+            GitLite git = getOrCreateRepo(runningRepoAbsPath);
+            GitLiteConfig config = git.getConfig();
+            List<GitLiteConfig.RemoteConfig> remoteConfigs = config.getRemoteConfigs();
+            if (CollectionUtils.isNotEmpty(remoteConfigs)) {
+                for (GitLiteConfig.RemoteConfig remoteConfig : remoteConfigs) {
+                    String remoteName = remoteConfig.getRemoteName();
+                    git.init();
+                    git.add();
+                    git.commit("auto commit");
+                    log.info("{} sync with remote {}@{} start", runningRepoAbsPath, remoteName, remoteConfig.getRemoteUrl());
+                    git.fetch(remoteName);
+                    git.merge(remoteName);
+                    git.packAndPush(remoteName);
+                    log.info("{} sync with remote {}@{} end", runningRepoAbsPath, remoteName, remoteConfig.getRemoteUrl());
+                }
+            }
         }
     }
 }
