@@ -24,6 +24,7 @@
                 style="width: 30%;float: left"
                 :show-header="false"
                 @row-click="e_read"
+                :cell-style="rowStyle"
                 highlight-current-row
                 height="900">
             <el-table-column prop="name" ></el-table-column>
@@ -82,6 +83,12 @@
             fileItems: []
         },
         methods: {
+            rowStyle:function ({row, column, rowIndex, columnIndex}) {
+                //设置表格每行间隔颜色
+                if (row.name === app.name){
+                    return "background:#2A3056;border:none;color: #FFFFFF;"
+                }
+            },
             onMouseOver:function (event){
                 $(event.target).focus()
             },
