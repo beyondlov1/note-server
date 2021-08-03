@@ -173,7 +173,7 @@ public class NoteController implements NoteControllerApi {
         }
     }
 
-    @Scheduled(fixedDelay = 60 * 60 * 1000,initialDelay = 1000)
+    @Scheduled(fixedDelay = 10 * 60 * 1000,initialDelay = 1000)
     public void autoSync() throws IOException {
         Set<String> runningRepoAbsPaths = getRunningRepoAbsPaths();
         for (String runningRepoAbsPath : runningRepoAbsPaths) {

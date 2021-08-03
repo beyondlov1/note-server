@@ -57,14 +57,15 @@
             <div class="row full-height">
                 <div class="col-xs-6 full-height">
                     <textarea class="col-xs-6 source full-height"
-                            v-on:mouseover.native="onMouseOverContent"
-                            v-on:mouseleave.native="onMouseLeaveContent"
+                            v-on:mouseover="onMouseOverContent"
+                            v-on:mouseleave="onMouseLeaveContent"
                             ref="content"
                             type="textarea"
                             placeholder="请输入内容"
                             v-model="content"
                             @blur="write"
-                            v-on:keyup.native="onContentKeyUp">
+                            @keydown.tab.prevent="tabFunc"
+                            v-on:keyup="onContentKeyUp">
                     </textarea>
                 </div>
                 <section class="col-xs-6 full-height">
@@ -118,6 +119,21 @@
                 if (event.ctrlKey === true && event.keyCode === 13) {
                     app.write(app.name,app.content)
                 }
+
+            },
+            insertInputTxt (id, insertTxt) {
+
+            },
+            tabFunc (e) {
+                const elInput = e.target;
+                const startPos = elInput.selectionStart;
+                const endPos = elInput.selectionEnd;
+                if (startPos === undefined || endPos === undefined) return
+                const txt = elInput.value;
+                elInput.value = txt.substring(0, startPos) + '  ' + txt.substring(endPos)
+                elInput.focus()
+                elInput.selectionStart = startPos + '  '.length
+                elInput.selectionEnd = startPos + '  '.length
             },
             write: function (e) {
                 if (!app.name || !app.content){
