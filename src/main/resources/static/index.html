@@ -56,7 +56,9 @@
             <br/>
             <div class="row full-height">
                 <div class="col-xs-6 full-height">
-                    <textarea class="col-xs-6 source full-height"
+                    <textarea
+                            id="content"
+                            class="col-xs-6 source full-height"
                             v-on:mouseover="onMouseOverContent"
                             v-on:mouseleave="onMouseLeaveContent"
                             ref="content"
@@ -111,6 +113,8 @@
             },
             onMouseOverContent:function (event){
                 app.$refs.content.focus()
+                event.target.selectionStart = app.content.length
+                event.target.selectionEnd = app.content.length
             },
             onMouseLeaveContent:function (event){
                 // app.$refs.content.blur()
@@ -119,10 +123,6 @@
                 if (event.ctrlKey === true && event.keyCode === 13) {
                     app.write(app.name,app.content)
                 }
-
-            },
-            insertInputTxt (id, insertTxt) {
-
             },
             tabFunc (e) {
                 const elInput = e.target;
