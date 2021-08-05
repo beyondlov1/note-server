@@ -5,12 +5,14 @@ import com.beyond.jgit.GitLiteConfig;
 import com.beyond.jgit.util.FileUtil;
 import com.beyond.jgit.util.JsonUtils;
 import com.beyond.jgit.util.PathUtils;
+import com.beyond.noteserver.NoteServerApplication;
 import com.beyond.noteserver.model.*;
 import com.fasterxml.jackson.core.type.TypeReference;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.boot.system.ApplicationHome;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -30,17 +32,12 @@ public class NoteController implements NoteControllerApi {
 
 
     static {
-        String filePath = System.getProperty("java.class.path");
-        String pathSplit = System.getProperty("path.separator");//得到当前操作系统的分隔符，windows下是";",linux下是":"
-
-        if(filePath.contains(pathSplit)){
-            filePath = filePath.substring(0,filePath.indexOf(pathSplit));
-        }else if (filePath.endsWith(".jar")) {//截取路径中的jar包名,可执行jar包运行的结果里包含".jar"
-            filePath = filePath.substring(0, filePath.lastIndexOf(File.separator) + 1);
-        }
-
+        ApplicationHome h = new ApplicationHome(NoteServerApplication.class);
+        File jarFile = h.getSource();
+        String filePath = jarFile.getParentFile().toString();
         CURRENT_REPO_FILE = new File(PathUtils.concat(filePath, "current_repo"));
         RUNNING_REPOS_FILE = new File(PathUtils.concat(filePath, "running_repos"));
+        log.info("running dir -> {}", filePath);
     }
 
 
@@ -141,9 +138,9 @@ public class NoteController implements NoteControllerApi {
 
     @Override
     public JsonResult<String> syncNow(SyncNowInModel inModel) throws IOException {
-        if (StringUtils.isNotBlank(inModel.getRemoteName())){
+        if (StringUtils.isNotBlank(inModel.getRemoteName())) {
             syncOneRepoWith(inModel.getRepoAbsPath(), inModel.getRemoteName());
-        }else {
+        } else {
             syncOneRepo(inModel.getRepoAbsPath());
         }
         return JsonResult.success("success");
@@ -155,8 +152,8 @@ public class NoteController implements NoteControllerApi {
         List<GitLiteConfig.RemoteConfig> remoteConfigs = config.getRemoteConfigs();
         if (CollectionUtils.isNotEmpty(remoteConfigs)) {
             for (GitLiteConfig.RemoteConfig remoteConfig : remoteConfigs) {
-                if (StringUtils.equals(remoteName, remoteConfig.getRemoteName())){
-                    syncOneRepoWith(repoAbsPath, remoteConfig,git);
+                if (StringUtils.equals(remoteName, remoteConfig.getRemoteName())) {
+                    syncOneRepoWith(repoAbsPath, remoteConfig, git);
                 }
             }
         }
@@ -225,7 +222,7 @@ public class NoteController implements NoteControllerApi {
         List<GitLiteConfig.RemoteConfig> remoteConfigs = config.getRemoteConfigs();
         if (CollectionUtils.isNotEmpty(remoteConfigs)) {
             for (GitLiteConfig.RemoteConfig remoteConfig : remoteConfigs) {
-                syncOneRepoWith(repoAbsPath, remoteConfig,git);
+                syncOneRepoWith(repoAbsPath, remoteConfig, git);
             }
         }
     }
