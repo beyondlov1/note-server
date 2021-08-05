@@ -37,4 +37,7 @@ public interface NoteControllerApi {
     @RequestMapping("/stopRunRepo")
     JsonResult<String> stopRunRepo(@RequestBody StopRunRepoInModel inModel) throws IOException;
 
+    @RequestMapping("/syncNow")
+    JsonResult<String> syncNow(@RequestBody SyncNowInModel inModel) throws IOException;
+
 }

@@ -45,7 +45,8 @@
             </el-table-column>
         </el-table>
         <div  style="width: 80%;float: left;height: 850px;" class="container full-height">
-            <p>当前路径: {{repoAbsPath}}</p>
+            <span>当前路径: {{repoAbsPath}}</span>
+            <el-button style="display: inline;" @click="syncNow" :loading="syncing" type="info" icon="el-icon-refresh" plain circle></el-button>
             <el-input
                     v-on:mouseover.native="onMouseOver"
                     placeholder="请输入名称"
@@ -101,9 +102,35 @@
             oldName: "",
             oldContent: "",
             fileItems: [],
-            selectedIndex: 0
+            selectedIndex: 0,
+            syncing:false
         },
         methods: {
+            syncNow: function (e){
+                app.syncing = true
+                postForJson("/note-server/syncNow", {repoAbsPath:app.repoAbsPath}, function (result) {
+                    list(function (result) {
+                        let selectedRow;
+                        for (const fileItem of app.fileItems) {
+                            if (fileItem.name === app.name){
+                                selectedRow = fileItem;
+                                break;
+                            }
+                        }
+                        app.$refs.fileList.setCurrentRow(selectedRow)
+                        app.$message({
+                            message: '同步成功',
+                            type: 'success',
+                            duration: 1000
+                        });
+                        app.oldName = app.name
+                        app.oldContent = app.content
+                        app.$refs.content.blur()
+                        app.syncing = false
+                        app.read(app.name)
+                    })
+                })
+            },
             tableRowClassName({row, rowIndex}) {
                 row.index = rowIndex
             },

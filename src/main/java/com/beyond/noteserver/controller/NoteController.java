@@ -92,7 +92,7 @@ public class NoteController implements NoteControllerApi {
             if (config != null) {
                 listReposOutModel.setCommitterName(config.getCommitterName());
                 listReposOutModel.setCommitterEmail(config.getCommitterEmail());
-                if (CollectionUtils.isNotEmpty(config.getRemoteConfigs())){
+                if (CollectionUtils.isNotEmpty(config.getRemoteConfigs())) {
                     GitLiteConfig.RemoteConfig remoteConfig = config.getRemoteConfigs().get(config.getRemoteConfigs().size() - 1);
                     listReposOutModel.setRemoteName(remoteConfig.getRemoteName());
                     listReposOutModel.setRemoteUrl(remoteConfig.getRemoteUrl());
@@ -137,6 +137,29 @@ public class NoteController implements NoteControllerApi {
         runningRepos.remove(inModel.getSelectedRepoAbsPath());
         JsonUtils.writeTo(runningRepos, RUNNING_REPOS_FILE);
         return JsonResult.success("success");
+    }
+
+    @Override
+    public JsonResult<String> syncNow(SyncNowInModel inModel) throws IOException {
+        if (StringUtils.isNotBlank(inModel.getRemoteName())){
+            syncOneRepoWith(inModel.getRepoAbsPath(), inModel.getRemoteName());
+        }else {
+            syncOneRepo(inModel.getRepoAbsPath());
+        }
+        return JsonResult.success("success");
+    }
+
+    private void syncOneRepoWith(String repoAbsPath, String remoteName) throws IOException {
+        GitLite git = getOrCreateRepo(repoAbsPath);
+        GitLiteConfig config = git.getConfig();
+        List<GitLiteConfig.RemoteConfig> remoteConfigs = config.getRemoteConfigs();
+        if (CollectionUtils.isNotEmpty(remoteConfigs)) {
+            for (GitLiteConfig.RemoteConfig remoteConfig : remoteConfigs) {
+                if (StringUtils.equals(remoteName, remoteConfig.getRemoteName())){
+                    syncOneRepoWith(repoAbsPath, remoteConfig,git);
+                }
+            }
+        }
     }
 
     private String getCurrentRepoAbsPath() throws IOException {
@@ -188,26 +211,35 @@ public class NoteController implements NoteControllerApi {
         }
     }
 
-    @Scheduled(fixedDelay = 10 * 60 * 1000,initialDelay = 1000)
+    @Scheduled(fixedDelay = 10 * 60 * 1000, initialDelay = 1000)
     public void autoSync() throws IOException {
         Set<String> runningRepoAbsPaths = getRunningRepoAbsPaths();
         for (String runningRepoAbsPath : runningRepoAbsPaths) {
-            GitLite git = getOrCreateRepo(runningRepoAbsPath);
-            GitLiteConfig config = git.getConfig();
-            List<GitLiteConfig.RemoteConfig> remoteConfigs = config.getRemoteConfigs();
-            if (CollectionUtils.isNotEmpty(remoteConfigs)) {
-                for (GitLiteConfig.RemoteConfig remoteConfig : remoteConfigs) {
-                    String remoteName = remoteConfig.getRemoteName();
-                    git.init();
-                    git.add();
-                    git.commit("auto commit");
-                    log.info("{} sync with remote {}@{} start", runningRepoAbsPath, remoteName, remoteConfig.getRemoteUrl());
-                    git.fetch(remoteName);
-                    git.merge(remoteName);
-                    git.packAndPush(remoteName);
-                    log.info("{} sync with remote {}@{} end", runningRepoAbsPath, remoteName, remoteConfig.getRemoteUrl());
-                }
+            syncOneRepo(runningRepoAbsPath);
+        }
+    }
+
+    private void syncOneRepo(String repoAbsPath) throws IOException {
+        GitLite git = getOrCreateRepo(repoAbsPath);
+        GitLiteConfig config = git.getConfig();
+        List<GitLiteConfig.RemoteConfig> remoteConfigs = config.getRemoteConfigs();
+        if (CollectionUtils.isNotEmpty(remoteConfigs)) {
+            for (GitLiteConfig.RemoteConfig remoteConfig : remoteConfigs) {
+                syncOneRepoWith(repoAbsPath, remoteConfig,git);
             }
         }
+    }
+
+    private void syncOneRepoWith(String repoAbsPath, GitLiteConfig.RemoteConfig remoteConfig, GitLite git) throws IOException {
+        String remoteName = remoteConfig.getRemoteName();
+        git.init();
+        git.add();
+        git.commit("auto commit");
+        log.info("{} sync with remote {}@{} start", repoAbsPath, remoteName, remoteConfig.getRemoteUrl());
+        git.fetch(remoteName);
+        git.merge(remoteName);
+        git.checkout();
+        git.packAndPush(remoteName);
+        log.info("{} sync with remote {}@{} end", repoAbsPath, remoteName, remoteConfig.getRemoteUrl());
     }
 }
