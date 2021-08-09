@@ -50,6 +50,9 @@ public class NoteController implements NoteControllerApi {
 
     @Override
     public JsonResult<String> read(ReadInModel readInModel) throws IOException {
+        if (StringUtils.isBlank(readInModel.getName())){
+            return JsonResult.error("name cannot be blank");
+        }
         return JsonResult.success(FileUtils.readFileToString(new File(PathUtils.concat(readInModel.getRepoAbsPath(), readInModel.getName())), StandardCharsets.UTF_8));
     }
 
