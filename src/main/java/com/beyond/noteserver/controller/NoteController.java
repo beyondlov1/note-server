@@ -297,6 +297,7 @@ public class NoteController implements NoteControllerApi {
                 long forwardMillis = todo.getRemindTime() - System.currentTimeMillis();
                 if (!todo.isReminded() && forwardMillis > 0 && forwardMillis <= 2*60*1000){
                     messageEndPoint.sendToRepo(currentRepoAbsPath, line);
+                    // todo： 直接改文件， 后缀加状态
                     todo.setReminded(true);
                 }
             }
