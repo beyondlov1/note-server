@@ -277,6 +277,31 @@
                 onSuccess(result)
             }
             document.addEventListener("keyup", onListKeyUp)
+
+            let userWs = new WebSocket("ws://localhost:13131/message?repoAbsPath="+app.repoAbsPath);
+
+            userWs.onopen = function(evt) {
+                console.log("Connection open ...");
+            };
+
+            userWs.onmessage = function(evt) {
+                console.log("Received Message: " + evt.data);
+                Notification.requestPermission().then(function(permission) {
+                    if(permission === 'granted') {
+                        let notification = new Notification("提醒", {
+                            body: evt.data
+                        });
+                        notification.onclick = function() {
+                            notification.close();
+                        }
+                    }
+                });
+            };
+
+            userWs.onclose = function(evt) {
+                console.log("Connection closed.");
+            };
+
         }, function (result) {
             app.$message({
                 message: '获取列表失败: '+result.msg,
@@ -303,4 +328,6 @@
             app.e_read(app.fileItems[nextIndex])
         }
     }
+
+
 </script>

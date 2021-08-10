@@ -4,16 +4,21 @@ import com.beyond.jgit.GitLite;
 import com.beyond.jgit.GitLiteConfig;
 import com.beyond.jgit.util.FileUtil;
 import com.beyond.jgit.util.JsonUtils;
+import com.beyond.jgit.util.ObjectUtils;
 import com.beyond.jgit.util.PathUtils;
 import com.beyond.noteserver.NoteServerApplication;
 import com.beyond.noteserver.model.*;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.time.TimeNLPUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.system.ApplicationHome;
 import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.io.File;
@@ -30,7 +35,6 @@ public class NoteController implements NoteControllerApi {
     private static final File CURRENT_REPO_FILE;
     private static final File RUNNING_REPOS_FILE;
 
-
     static {
         ApplicationHome h = new ApplicationHome(NoteServerApplication.class);
         File jarFile = h.getSource();
@@ -40,6 +44,8 @@ public class NoteController implements NoteControllerApi {
         log.info("running dir -> {}", filePath);
     }
 
+    @Autowired
+    private MessageEndPoint messageEndPoint;
 
     @Override
     public JsonResult<String> write(WriteInModel writeInModel) throws IOException {
@@ -241,5 +247,73 @@ public class NoteController implements NoteControllerApi {
         git.checkout();
         git.packAndPush(remoteName);
         log.info("{} sync with remote {}@{} end", repoAbsPath, remoteName, remoteConfig.getRemoteUrl());
+    }
+
+
+    @Scheduled(fixedRate = 60 * 1000, initialDelay = 1000)
+    public void send() throws IOException {
+        String currentRepoAbsPath = getCurrentRepoAbsPath();
+        if (StringUtils.isBlank(currentRepoAbsPath)){
+            return;
+        }
+        File RUNNING_TODOS_FILE = new File(PathUtils.concat(currentRepoAbsPath, ".todo", "running_todos.json"));
+        if (!RUNNING_TODOS_FILE.getParentFile().exists()){
+            boolean mkdirs = RUNNING_TODOS_FILE.getParentFile().mkdirs();
+        }
+
+        List<Todo> todos;
+        if (RUNNING_TODOS_FILE.exists()){
+            todos = JsonUtils.readValue(FileUtils.readFileToString(RUNNING_TODOS_FILE, StandardCharsets.UTF_8), new TypeReference<List<Todo>>() {
+            });
+            if (todos == null){
+                todos = new ArrayList<>();
+            }
+        }else {
+            todos = new ArrayList<>();
+        }
+        Map<String, Todo> todoMap = todos.stream().collect(Collectors.toMap(Todo::getId, x -> x, (v1, v2) -> v2));
+
+        Collection<File> todoFiles = FileUtil.listChildOnlyFilesWithoutDirOf(currentRepoAbsPath, file -> file.getName().endsWith(".todo"), ".git");
+        for (File todoFile : todoFiles) {
+            List<String> lines = FileUtils.readLines(todoFile, StandardCharsets.UTF_8);
+            int i = -1;
+            for (String line : lines) {
+                i++;
+                if (StringUtils.isBlank(line)){
+                    continue;
+                }
+                Todo todo = todoMap.get(ObjectUtils.sha1hash((line+"$"+i+"#"+todoFile.getAbsolutePath()).getBytes()));
+                if (todo == null){
+                    Date date = TimeNLPUtil.parse(line);
+                    if (date == null){
+                        continue;
+                    }
+                    todo = new Todo();
+                    todo.setId(ObjectUtils.sha1hash((line+"$"+i+"#"+todoFile.getAbsolutePath()).getBytes()));
+                    todo.setRemindTime(date.getTime());
+                    todos.add(todo);
+                }
+
+                long forwardMillis = todo.getRemindTime() - System.currentTimeMillis();
+                if (!todo.isReminded() && forwardMillis > 0 && forwardMillis <= 2*60*1000){
+                    messageEndPoint.sendToRepo(currentRepoAbsPath, line);
+                    todo.setReminded(true);
+                }
+            }
+        }
+        todos.removeIf(todo -> {
+            long forwardMillis = todo.getRemindTime() - System.currentTimeMillis();
+            return forwardMillis < -10 * 60 * 1000;
+        });
+        JsonUtils.writeTo(todos,RUNNING_TODOS_FILE);
+    }
+
+    @GetMapping("/sendMessage")
+    public void sendMessage(@RequestParam("message") String message) throws IOException {
+        String currentRepoAbsPath = getCurrentRepoAbsPath();
+        if (StringUtils.isBlank(currentRepoAbsPath)){
+            return;
+        }
+        messageEndPoint.sendToRepo(currentRepoAbsPath, message);
     }
 }

@@ -19,6 +19,17 @@
     <dependencies>
 
         <dependency>
+            <groupId>com.cn21</groupId>
+            <artifactId>Time-NLP</artifactId>
+            <version>1.0.0</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-websocket</artifactId>
+        </dependency>
+
+        <dependency>
             <groupId>com.beyond</groupId>
             <artifactId>jgit-lite-main</artifactId>
             <version>1.0</version>
