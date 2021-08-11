@@ -5,13 +5,14 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 
 import java.io.IOException;
+import java.text.ParseException;
 import java.util.List;
 
 @RequestMapping("note-server")
 public interface NoteControllerApi {
 
     @RequestMapping("/write")
-    JsonResult<String> write(@RequestBody WriteInModel writeInModel) throws IOException ;
+    JsonResult<String> write(@RequestBody WriteInModel writeInModel) throws IOException, ParseException;
 
     @RequestMapping("/read")
     JsonResult<String> read(@RequestBody ReadInModel readInModel) throws  IOException ;

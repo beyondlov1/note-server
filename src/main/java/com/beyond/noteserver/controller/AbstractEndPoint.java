@@ -4,12 +4,11 @@ import com.beyond.noteserver.util.WebSocketUtils;
 
 import javax.websocket.*;
 import java.io.IOException;
+import java.text.ParseException;
 import java.util.Map;
 import java.util.Properties;
 
 public abstract class AbstractEndPoint {
-
-    
 
     @OnOpen
     public void onOpen(Session session) {
@@ -20,9 +19,12 @@ public abstract class AbstractEndPoint {
     }
 
     @OnMessage
-    public void onMessage(String message, Session session) throws IOException {
+    public void onMessage(String message, Session session) throws IOException, ParseException {
         System.out.println("message received:"+message);
+        onMessageInternal(message, session);
     }
+
+    protected abstract void onMessageInternal(String message, Session session) throws IOException, ParseException;
 
     @OnError
     public void onError(Session session, Throwable error) {
@@ -38,4 +40,5 @@ public abstract class AbstractEndPoint {
     }
     
     protected abstract Map<String,Session> getSessionMap();
+
 }

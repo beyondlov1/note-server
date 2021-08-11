@@ -106,29 +106,34 @@
             syncing:false
         },
         methods: {
-            syncNow: function (e){
-                app.syncing = true
-                postForJson("/note-server/syncNow", {repoAbsPath:app.repoAbsPath}, function (result) {
-                    list(function (result) {
-                        let selectedRow;
-                        for (const fileItem of app.fileItems) {
-                            if (fileItem.name === app.name){
-                                selectedRow = fileItem;
-                                break;
-                            }
+            reload: function (message){
+                list(function (result) {
+                    let selectedRow;
+                    for (const fileItem of app.fileItems) {
+                        if (fileItem.name === app.name){
+                            selectedRow = fileItem;
+                            break;
                         }
-                        app.$refs.fileList.setCurrentRow(selectedRow)
+                    }
+                    app.$refs.fileList.setCurrentRow(selectedRow)
+                    if (message){
                         app.$message({
-                            message: '同步成功',
+                            message: message,
                             type: 'success',
                             duration: 1000
                         });
-                        app.oldName = app.name
-                        app.oldContent = app.content
-                        app.$refs.content.blur()
-                        app.syncing = false
-                        app.read(app.name)
-                    })
+                    }
+                    app.oldName = app.name
+                    app.oldContent = app.content
+                    app.$refs.content.blur()
+                    app.syncing = false
+                    app.read(app.name)
+                })
+            },
+            syncNow: function (e){
+                app.syncing = true
+                postForJson("/note-server/syncNow", {repoAbsPath:app.repoAbsPath}, function (result) {
+                    app.reload('同步成功')
                 })
             },
             tableRowClassName({row, rowIndex}) {
@@ -191,6 +196,9 @@
                         app.oldName = app.name
                         app.oldContent = app.content
                         app.$refs.content.blur()
+                        if (app.name.endsWith(".todo")){
+                            app.reload()
+                        }
                     })
                 },function (result) {
                     app.$message({
@@ -286,16 +294,26 @@
 
             userWs.onmessage = function(evt) {
                 console.log("Received Message: " + evt.data);
-                Notification.requestPermission().then(function(permission) {
-                    if(permission === 'granted') {
-                        let notification = new Notification("提醒", {
-                            body: evt.data
-                        });
-                        notification.onclick = function() {
-                            notification.close();
+                let data = JSON.parse(evt.data);
+                if (data["type"] === 1){
+                    Notification.requestPermission().then(function(permission) {
+                        console.log(data["data"]["msg"])
+                        if(permission === 'granted') {
+                            let notification = new Notification("提醒", {
+                                body: data["data"]["msg"]
+                            });
+                            notification.onclick = function() {
+                                notification.close();
+                            }
                         }
-                    }
-                });
+                    });
+                    userWs.send(JSON.stringify(data["data"]["attachment"]))
+                }
+                if (data["type"] === 2){
+                    app.reload("刷新成功");
+                    // app.syncNow(); // 暂时不同步, 只有两个设备同时在线，并且两个都有修改时才会有merge冲突问题
+                }
+
             };
 
             userWs.onclose = function(evt) {

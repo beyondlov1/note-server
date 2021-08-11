@@ -4,12 +4,10 @@ import com.beyond.jgit.GitLite;
 import com.beyond.jgit.GitLiteConfig;
 import com.beyond.jgit.util.FileUtil;
 import com.beyond.jgit.util.JsonUtils;
-import com.beyond.jgit.util.ObjectUtils;
 import com.beyond.jgit.util.PathUtils;
 import com.beyond.noteserver.NoteServerApplication;
 import com.beyond.noteserver.model.*;
 import com.fasterxml.jackson.core.type.TypeReference;
-import com.time.TimeNLPUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.io.FileUtils;
@@ -24,6 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.text.ParseException;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -48,8 +47,14 @@ public class NoteController implements NoteControllerApi {
     private MessageEndPoint messageEndPoint;
 
     @Override
-    public JsonResult<String> write(WriteInModel writeInModel) throws IOException {
-        FileUtils.writeStringToFile(new File(PathUtils.concat(writeInModel.getRepoAbsPath(), writeInModel.getName())), writeInModel.getContent(), StandardCharsets.UTF_8);
+    public JsonResult<String> write(WriteInModel writeInModel) throws IOException, ParseException {
+        File file = new File(PathUtils.concat(writeInModel.getRepoAbsPath(), writeInModel.getName()));
+        if (writeInModel.getName().endsWith(".todo")){
+            parseAndWriteTodo(writeInModel.getContent(),file);
+            getOrCreateRepo(writeInModel.getRepoAbsPath());
+            return JsonResult.success("success");
+        }
+        FileUtils.writeStringToFile(file, writeInModel.getContent(), StandardCharsets.UTF_8);
         getOrCreateRepo(writeInModel.getRepoAbsPath());
         return JsonResult.success("success");
     }
@@ -251,62 +256,41 @@ public class NoteController implements NoteControllerApi {
 
 
     @Scheduled(fixedRate = 60 * 1000, initialDelay = 1000)
-    public void send() throws IOException {
+    public void autoNotify() throws IOException, ParseException {
         String currentRepoAbsPath = getCurrentRepoAbsPath();
         if (StringUtils.isBlank(currentRepoAbsPath)){
             return;
         }
-        File RUNNING_TODOS_FILE = new File(PathUtils.concat(currentRepoAbsPath, ".todo", "running_todos.json"));
-        if (!RUNNING_TODOS_FILE.getParentFile().exists()){
-            boolean mkdirs = RUNNING_TODOS_FILE.getParentFile().mkdirs();
-        }
-
-        List<Todo> todos;
-        if (RUNNING_TODOS_FILE.exists()){
-            todos = JsonUtils.readValue(FileUtils.readFileToString(RUNNING_TODOS_FILE, StandardCharsets.UTF_8), new TypeReference<List<Todo>>() {
-            });
-            if (todos == null){
-                todos = new ArrayList<>();
-            }
-        }else {
-            todos = new ArrayList<>();
-        }
-        Map<String, Todo> todoMap = todos.stream().collect(Collectors.toMap(Todo::getId, x -> x, (v1, v2) -> v2));
-
         Collection<File> todoFiles = FileUtil.listChildOnlyFilesWithoutDirOf(currentRepoAbsPath, file -> file.getName().endsWith(".todo"), ".git");
         for (File todoFile : todoFiles) {
             List<String> lines = FileUtils.readLines(todoFile, StandardCharsets.UTF_8);
-            int i = -1;
             for (String line : lines) {
-                i++;
                 if (StringUtils.isBlank(line)){
                     continue;
                 }
-                Todo todo = todoMap.get(ObjectUtils.sha1hash((line+"$"+i+"#"+todoFile.getAbsolutePath()).getBytes()));
-                if (todo == null){
-                    Date date = TimeNLPUtil.parse(line);
-                    if (date == null){
-                        continue;
-                    }
-                    todo = new Todo();
-                    todo.setId(ObjectUtils.sha1hash((line+"$"+i+"#"+todoFile.getAbsolutePath()).getBytes()));
-                    todo.setRemindTime(date.getTime());
-                    todos.add(todo);
-                }
-
-                long forwardMillis = todo.getRemindTime() - System.currentTimeMillis();
-                if (!todo.isReminded() && forwardMillis > 0 && forwardMillis <= 2*60*1000){
-                    messageEndPoint.sendToRepo(currentRepoAbsPath, line);
-                    // todo： 直接改文件， 后缀加状态
-                    todo.setReminded(true);
+                Todo parsedTodo = Todo.parseFrom(line);
+                if (parsedTodo.getReminded() != null && !parsedTodo.getReminded()
+                        && parsedTodo.getRemindTime() - System.currentTimeMillis() < 60 * 1000 && parsedTodo.getRemindTime() - System.currentTimeMillis() > -60 * 1000) {
+                    messageEndPoint.sendToRepo(currentRepoAbsPath, NotifyContent.of(parsedTodo.getOriginText(),TodoReplaceUnit.of(currentRepoAbsPath, todoFile.getAbsolutePath(), parsedTodo.toFormattedLine())));
                 }
             }
         }
-        todos.removeIf(todo -> {
-            long forwardMillis = todo.getRemindTime() - System.currentTimeMillis();
-            return forwardMillis < -10 * 60 * 1000;
-        });
-        JsonUtils.writeTo(todos,RUNNING_TODOS_FILE);
+    }
+
+    private void parseAndWriteTodo(String content, File todoFile) throws IOException, ParseException {
+        String[] lines = StringUtils.split(content, "\n");
+        List<String> newLines = new ArrayList<>();
+        for (String line : lines) {
+            if (StringUtils.isBlank(line)){
+                newLines.add(line);
+                continue;
+            }
+            Todo parsedTodo = Todo.parseFrom(line);
+            newLines.add(parsedTodo.toFormattedLine());
+        }
+
+        String newContent = String.join("\n", newLines);
+        FileUtils.write(todoFile, newContent, StandardCharsets.UTF_8);
     }
 
     @GetMapping("/sendMessage")
