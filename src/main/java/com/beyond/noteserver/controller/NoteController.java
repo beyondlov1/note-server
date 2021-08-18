@@ -33,6 +33,7 @@ public class NoteController implements NoteControllerApi {
 
     private static final File CURRENT_REPO_FILE;
     private static final File RUNNING_REPOS_FILE;
+    private static final File CURRENT_REPO_SHOWING_COMMIT_FILE;
 
     static {
         ApplicationHome h = new ApplicationHome(NoteServerApplication.class);
@@ -40,6 +41,7 @@ public class NoteController implements NoteControllerApi {
         String filePath = jarFile.getParentFile().toString();
         CURRENT_REPO_FILE = new File(PathUtils.concat(filePath, "current_repo"));
         RUNNING_REPOS_FILE = new File(PathUtils.concat(filePath, "running_repos"));
+        CURRENT_REPO_SHOWING_COMMIT_FILE = new File(PathUtils.concat(filePath, "current_repo_showing_commit"));
         log.info("running dir -> {}", filePath);
     }
 
@@ -49,8 +51,8 @@ public class NoteController implements NoteControllerApi {
     @Override
     public JsonResult<String> write(WriteInModel writeInModel) throws IOException, ParseException {
         File file = new File(PathUtils.concat(writeInModel.getRepoAbsPath(), writeInModel.getName()));
-        if (writeInModel.getName().endsWith(".todo")){
-            parseAndWriteTodo(writeInModel.getContent(),file);
+        if (writeInModel.getName().endsWith(".todo")) {
+            parseAndWriteTodo(writeInModel.getContent(), file);
             getOrCreateRepo(writeInModel.getRepoAbsPath());
             return JsonResult.success("success");
         }
@@ -61,7 +63,7 @@ public class NoteController implements NoteControllerApi {
 
     @Override
     public JsonResult<String> read(ReadInModel readInModel) throws IOException {
-        if (StringUtils.isBlank(readInModel.getName())){
+        if (StringUtils.isBlank(readInModel.getName())) {
             return JsonResult.error("name cannot be blank");
         }
         return JsonResult.success(FileUtils.readFileToString(new File(PathUtils.concat(readInModel.getRepoAbsPath(), readInModel.getName())), StandardCharsets.UTF_8));
@@ -75,7 +77,8 @@ public class NoteController implements NoteControllerApi {
 
     @Override
     public JsonResult<List<ListOutModel>> list(ListInModel listInModel) throws IOException {
-        getOrCreateRepo(listInModel.getRepoAbsPath());
+        GitLite git = getOrCreateRepo(listInModel.getRepoAbsPath());
+        FileUtils.writeStringToFile(CURRENT_REPO_SHOWING_COMMIT_FILE, git.findLocalCommitObjectId(), StandardCharsets.UTF_8);
         Collection<File> files = FileUtil.listChildFilesAndDirs(listInModel.getRepoAbsPath(), x -> !x.getName().startsWith(".")).stream().filter(File::isFile).collect(Collectors.toList());
         return JsonResult.success(files.stream().map(x -> {
             ListOutModel outModel = new ListOutModel();
@@ -228,6 +231,15 @@ public class NoteController implements NoteControllerApi {
         for (String runningRepoAbsPath : runningRepoAbsPaths) {
             syncOneRepo(runningRepoAbsPath);
         }
+        String currentRepoAbsPath = getCurrentRepoAbsPath();
+        GitLite git = getOrCreateRepo(currentRepoAbsPath);
+
+        if (CURRENT_REPO_SHOWING_COMMIT_FILE.exists()){
+            String currentShowingCommit = FileUtils.readFileToString(CURRENT_REPO_SHOWING_COMMIT_FILE, StandardCharsets.UTF_8);
+            if (!StringUtils.equals(git.findLocalCommitObjectId(), currentShowingCommit)) {
+                messageEndPoint.reloadRepo(currentRepoAbsPath);
+            }
+        }
     }
 
     private void syncOneRepo(String repoAbsPath) throws IOException {
@@ -258,20 +270,20 @@ public class NoteController implements NoteControllerApi {
     @Scheduled(fixedRate = 60 * 1000, initialDelay = 1000)
     public void autoNotify() throws IOException, ParseException {
         String currentRepoAbsPath = getCurrentRepoAbsPath();
-        if (StringUtils.isBlank(currentRepoAbsPath)){
+        if (StringUtils.isBlank(currentRepoAbsPath)) {
             return;
         }
         Collection<File> todoFiles = FileUtil.listChildOnlyFilesWithoutDirOf(currentRepoAbsPath, file -> file.getName().endsWith(".todo"), ".git");
         for (File todoFile : todoFiles) {
             List<String> lines = FileUtils.readLines(todoFile, StandardCharsets.UTF_8);
             for (String line : lines) {
-                if (StringUtils.isBlank(line)){
+                if (StringUtils.isBlank(line)) {
                     continue;
                 }
                 Todo parsedTodo = Todo.parseFrom(line);
                 if (parsedTodo.getReminded() != null && !parsedTodo.getReminded()
                         && parsedTodo.getRemindTime() - System.currentTimeMillis() < 60 * 1000 && parsedTodo.getRemindTime() - System.currentTimeMillis() > -60 * 1000) {
-                    messageEndPoint.sendToRepo(currentRepoAbsPath, NotifyContent.of(parsedTodo.getOriginText(),TodoReplaceUnit.of(currentRepoAbsPath, todoFile.getAbsolutePath(), parsedTodo.toFormattedLine())));
+                    messageEndPoint.sendToRepo(currentRepoAbsPath, NotifyContent.of(parsedTodo.getOriginText(), TodoReplaceUnit.of(currentRepoAbsPath, todoFile.getAbsolutePath(), parsedTodo.toFormattedLine())));
                 }
             }
         }
@@ -281,7 +293,7 @@ public class NoteController implements NoteControllerApi {
         String[] lines = StringUtils.splitPreserveAllTokens(content, "\n");
         List<String> newLines = new ArrayList<>();
         for (String line : lines) {
-            if (StringUtils.isBlank(line)){
+            if (StringUtils.isBlank(line)) {
                 newLines.add(line);
                 continue;
             }
@@ -296,7 +308,7 @@ public class NoteController implements NoteControllerApi {
     @GetMapping("/sendMessage")
     public void sendMessage(@RequestParam("message") String message) throws IOException {
         String currentRepoAbsPath = getCurrentRepoAbsPath();
-        if (StringUtils.isBlank(currentRepoAbsPath)){
+        if (StringUtils.isBlank(currentRepoAbsPath)) {
             return;
         }
         messageEndPoint.sendToRepo(currentRepoAbsPath, message);
