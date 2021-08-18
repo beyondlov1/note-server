@@ -278,7 +278,7 @@ public class NoteController implements NoteControllerApi {
     }
 
     private void parseAndWriteTodo(String content, File todoFile) throws IOException, ParseException {
-        String[] lines = StringUtils.split(content, "\n");
+        String[] lines = StringUtils.splitPreserveAllTokens(content, "\n");
         List<String> newLines = new ArrayList<>();
         for (String line : lines) {
             if (StringUtils.isBlank(line)){
