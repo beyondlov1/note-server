@@ -178,6 +178,7 @@
                 if (app.name.trim() === app.oldName.trim() && app.content.trim() === app.oldContent.trim()){
                     return;
                 }
+                console.log(app.content)
                 postForJson("/note-server/write", {repoAbsPath:app.repoAbsPath, name:app.name,content:app.content}, function (result) {
                     list(function (result) {
                         let selectedRow;
